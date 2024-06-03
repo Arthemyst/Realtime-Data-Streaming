@@ -3,6 +3,7 @@ from datetime import datetime
 
 import requests
 from requests import Response
+from kafka import KafkaProducer
 # from airflow import DAG
 # from airflow.operators.python import PythonOperator
 
@@ -46,7 +47,8 @@ def format_data(response: dict) -> dict[str, str]:
 def stream_data():
     response = get_data()
     response = format_data(response)
-    print(json.dumps(response, indent=3))
+    producer = KafkaProducer(bootstrap_servers=['localhost:9092'], max_block_ms=5000)
+    producer.send('user_created', json.dumps(response).encode('utf-8'))
 
 
 # with DAG("user_automation",
@@ -57,5 +59,6 @@ def stream_data():
 #         task_id="stream_data_from_api",
 #         python_callable=stream_data
 #     )
+
 
 stream_data()
