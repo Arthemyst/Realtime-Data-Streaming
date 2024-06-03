@@ -1,11 +1,12 @@
 import json
+import logging
+import time
 from datetime import datetime
 
 import requests
-from requests import Response
+from airflow import DAG
+from airflow.operators.python import PythonOperator
 from kafka import KafkaProducer
-# from airflow import DAG
-# from airflow.operators.python import PythonOperator
 
 default_args = {
     "owner": "arthemyst",
@@ -45,20 +46,26 @@ def format_data(response: dict) -> dict[str, str]:
 
 
 def stream_data():
-    response = get_data()
-    response = format_data(response)
-    producer = KafkaProducer(bootstrap_servers=['localhost:9092'], max_block_ms=5000)
-    producer.send('user_created', json.dumps(response).encode('utf-8'))
+    producer = KafkaProducer(bootstrap_servers=['broker:29092'], max_block_ms=5000)
+    curr_time = time.time()
+
+    while True:
+        if time.time() > curr_time + 60:
+            break
+        try:
+            response = get_data()
+            response = format_data(response)
+            producer.send('user_created', json.dumps(response).encode('utf-8'))
+        except Exception as e:
+            logging.error(f'An error occured: {e}')
+            continue
 
 
-# with DAG("user_automation",
-#          default_args=default_args,
-#          schedule_interval='@daily',
-#          catchup=False) as directed_acyclic_graph:
-#     streaming_task = PythonOperator(
-#         task_id="stream_data_from_api",
-#         python_callable=stream_data
-#     )
-
-
-stream_data()
+with DAG("user_automation",
+         default_args=default_args,
+         schedule_interval='@daily',
+         catchup=False) as directed_acyclic_graph:
+    streaming_task = PythonOperator(
+        task_id="stream_data_from_api",
+        python_callable=stream_data
+    )
